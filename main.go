@@ -36,6 +36,7 @@ import (
 var (
 	// Flags
 	verbose = flag.Bool("v", false, "Verbose - print lots of stuff")
+	swap    = flag.String("r", "", "Replace - replace the word between underscore with new one, like: -r old0=new0,old1=new1")
 )
 
 // Logging function
@@ -80,5 +81,8 @@ func main() {
 	}
 
 	t := newTemplate(cwd, args[0], args[1])
+	if nil != swap && "" != *swap {
+		t.setSwap(*swap)
+	}
 	t.instantiate()
 }

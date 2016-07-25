@@ -27,6 +27,8 @@ type template struct {
 	mappings     map[string]string
 	newIsPublic  bool
 	inputFile    string
+	replaceFrom  []string
+	replaceTo    []string
 }
 
 // findPackageName reads all the go packages in the curent directory
@@ -43,18 +45,33 @@ func findPackageName() string {
 func newTemplate(dir, pkg, templateArgsString string) *template {
 	name, templateArgs := parseTemplateAndArgs(templateArgsString)
 	return &template{
-		Package:    pkg,
-		Name:       name,
-		Args:       templateArgs,
-		Dir:        dir,
-		mappings:   make(map[string]string),
-		NewPackage: findPackageName(),
+		Package:     pkg,
+		Name:        name,
+		Args:        templateArgs,
+		Dir:         dir,
+		mappings:    make(map[string]string),
+		NewPackage:  findPackageName(),
+		replaceFrom: make([]string, 0),
+		replaceTo:   make([]string, 0),
 	}
 }
 
 // Add a mapping for identifier
 func (t *template) addMapping(name string) {
-	replacementName := ""
+	replacementName := name
+	// Replace word int Method
+	replaced := false
+	for i := range t.replaceFrom {
+		debugf("Replace: %s %s", replacementName, t.replaceFrom[i])
+		if strings.Index(replacementName, t.replaceFrom[i]) != -1 {
+			replaced = true
+			replacementName = strings.Replace(replacementName, t.replaceFrom[i], t.replaceTo[i], -1)
+		}
+	}
+	if replaced {
+		t.mappings[name] = replacementName
+		return
+	}
 	if !strings.Contains(name, t.templateName) {
 		// If name doesn't contain template name then just prefix it
 		innerName := strings.ToUpper(t.Name[:1]) + t.Name[1:]
@@ -263,7 +280,13 @@ func (t *template) parse(inputFile string) {
 		case *ast.FuncDecl:
 			// A function definition
 			if d.Recv != nil {
-				// Has receiver so is a method - ignore this function
+				// Has receiver so is a method, doing replace
+				for _, from := range t.replaceFrom {
+					if strings.Contains(d.Name.Name, from) {
+						namesToMangle = append(namesToMangle, d.Name.Name)
+						break
+					}
+				}
 			} else {
 				//debugf("FuncDecl = %#v", d)
 				debugf("FuncDecl = %s", d.Name.Name)
@@ -344,4 +367,21 @@ func (t *template) instantiate() {
 
 	templateFilePath := path.Join(p.Dir, p.GoFiles[0])
 	t.parse(templateFilePath)
+}
+
+// SetSwap input the swap pair
+func (t *template) setSwap(swap string) {
+	debugf("Parsing swap parameters:%s", swap)
+
+	pairStrings := strings.Split(swap, ",")
+	for _, pairString := range pairStrings {
+		pair := strings.Split(pairString, "=")
+		if len(pair) != 2 {
+			fatalf("Swap paramters wrong!")
+		}
+		t.replaceFrom = append(t.replaceFrom, "_"+strings.TrimSpace(pair[0])+"_")
+		t.replaceTo = append(t.replaceTo, strings.TrimSpace(pair[1]))
+	}
+	debugf("from = %v", t.replaceFrom)
+	debugf("to = %v", t.replaceTo)
 }
